@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coordinate Quest: RAINBOW POP!</title>
+    <style>
+        :root {
+            --neon-pink: #FF007F;
+            --electric-blue: #3A0CA3;
+            --lime: #72EF36;
+            --cyan: #4CC9F0;
+            --yellow: #FFD60A;
+            --bg: #FFEBFB;
+        }
+
+        body { 
+            font-family: 'Arial Black', sans-serif; 
+            background-color: var(--bg);
+            background-image: radial-gradient(#FFD6FB 2px, transparent 2px);
+            background-size: 30px 30px;
+            display: flex; flex-direction: column; align-items: center; 
+            margin: 0; padding: 20px;
+        }
+
+        #game-card {
+            background: white; padding: 25px; border-radius: 40px;
+            box-shadow: 10px 10px 0px var(--electric-blue);
+            max-width: 600px; text-align: center; border: 8px solid #000;
+            transition: 0.3s;
+        }
+
+        #instruction-bubble {
+            background: var(--neon-pink); color: white; padding: 20px; border-radius: 25px;
+            margin-bottom: 15px; font-size: 1.8rem; font-weight: 900;
+            box-shadow: 5px 5px 0px #000; border: 4px solid #000;
+        }
+
+        .lvl-banner { 
+            background: var(--yellow); padding: 5px 15px; border-radius: 10px;
+            display: inline-block; font-size: 1rem; border: 3px solid #000;
+            margin-bottom: 10px; transform: rotate(-2deg);
+        }
+
+        canvas { background: white; border-radius: 15px; cursor: crosshair; border: 4px solid #000; }
+
+        .stats { display: flex; justify-content: space-around; margin-bottom: 15px; gap: 10px; }
+        .stat-box { 
+            background: var(--lime); padding: 10px 20px; border-radius: 15px; 
+            border: 4px solid #000; font-size: 1.2rem; font-weight: 900;
+            box-shadow: 4px 4px 0px #000;
+        }
+
+        .controls { margin-top: 20px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+        button {
+            padding: 12px 25px; font-weight: 900; cursor: pointer; border-radius: 15px; border: 4px solid #000;
+            color: white; box-shadow: 4px 4px 0px #000; transition: 0.1s; text-transform: uppercase;
+        }
+        button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0px #000; }
+        
+        .btn-en { background: var(--cyan); }
+        .btn-es { background: var(--neon-pink); }
+        .btn-audio { background: var(--yellow); color: #000; }
+        .btn-quiz { background: #000; color: #fff; }
+
+        .shake { animation: shake 0.3s; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+    </style>
+</head>
+<body>
+
+<div id="game-card">
+    <div class="lvl-banner" id="lvl-display">LEVEL 1: INTEGER POP</div>
+    <div class="stats">
+        <div class="stat-box">⭐ SCORE: <span id="score">0</span></div>
+        <div class="stat-box" style="background: var(--cyan)">QUIZ: <span id="quiz-status">OFF</span></div>
+    </div>
+
+    <div id="instruction-bubble">READY?!</div>
+    <canvas id="gridCanvas" width="400" height="400"></canvas>
+
+    <div class="controls">
+        <button class="btn-en" onclick="setLanguage('en')">English</button>
+        <button class="btn-es" onclick="setLanguage('es')">Español</button>
+        <button class="btn-audio" onclick="speakTask()">🔊 VOICE</button>
+        <button class="btn-quiz" onclick="toggleQuiz()">Toggle Quiz Mode</button>
+    </div>
+</div>
+
+<script>
+    let language = 'en', score = 0, isQuizMode = false, attempts = 0;
+    let targetX = 0, targetY = 0, targetQuad = 0, mode = "point";
+    const canvas = document.getElementById('gridCanvas'), ctx = canvas.getContext('2d');
+    const step = 20, origin = 200;
+
+    const phrases = {
+        en: { 
+            point: "FIND", quad: "QUADRANT", 
+            lvl1: "LEVEL 1: INTEGERS", lvl2: "LEVEL 2: QUADRANTS", lvl3: "LEVEL 3: RATIONALS",
+            win: "YES!", lose: "NO! TRY AGAIN", review: "LOOK AT THE YELLOW CIRCLE" 
+        },
+        es: { 
+            point: "BUSCA", quad: "CUADRANTE", 
+            lvl1: "NIVEL 1: ENTEROS", lvl2: "NIVEL 2: CUADRANTES", lvl3: "NIVEL 3: RACIONALES",
+            win: "¡SÍ!", lose: "¡NO! OTRA VEZ", review: "MIRA EL CÍRCULO AMARILLO" 
+        }
+    };
+
+    function initRound() {
+        attempts = 0;
+        if (score < 50) {
+            mode = "point";
+            targetX = Math.floor(Math.random() * 17) - 8;
+            targetY = Math.floor(Math.random() * 17) - 8;
+            document.getElementById('lvl-display').innerText = phrases[language].lvl1;
+        } else if (score < 100) {
+            mode = Math.random() > 0.5 ? "point" : "quadrant";
+            targetX = Math.floor(Math.random() * 17) - 8;
+            targetY = Math.floor(Math.random() * 17) - 8;
+            targetQuad = Math.floor(Math.random() * 4) + 1;
+            document.getElementById('lvl-display').innerText = phrases[language].lvl2;
+        } else {
+            mode = Math.random() > 0.4 ? "point" : "quadrant";
+            targetX = (Math.floor(Math.random() * 17) - 8) / (Math.random() > 0.5 ? 2 : 1);
+            targetY = (Math.floor(Math.random() * 17) - 8) / (Math.random() > 0.5 ? 2 : 1);
+            targetQuad = Math.floor(Math.random() * 4) + 1;
+            document.getElementById('lvl-display').innerText = phrases[language].lvl3;
+        }
+        updateUI();
+        setTimeout(speakTask, 400);
+    }
+
+    function updateUI() {
+        const bubble = document.getElementById('instruction-bubble');
+        if (mode === "point") {
+            bubble.innerText = `${phrases[language].point}: (${targetX}, ${targetY})`;
+        } else {
+            let rom = targetQuad === 1 ? 'I' : targetQuad === 2 ? 'II' : targetQuad === 3 ? 'III' : 'IV';
+            bubble.innerText = `${phrases[language].quad}: ${rom}`;
+        }
+        document.getElementById('score').innerText = score;
+        document.getElementById('quiz-status').innerText = isQuizMode ? "ON" : "OFF";
+        drawGrid();
+    }
+
+    function drawGrid() {
+        ctx.clearRect(0,0,400,400);
+        ctx.strokeStyle = "#e5e5e5";
+        for(let i=0; i<=400; i+=step) {
+            ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,400); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(400,i); ctx.stroke();
+        }
+
+        // Roman Numerals (HIDDEN IN QUIZ MODE)
+        if (!isQuizMode) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+            ctx.font = "900 80px Arial"; ctx.textAlign = "center";
+            ctx.fillText("I", 300, 115); ctx.fillText("II", 100, 115);
+            ctx.fillText("III", 100, 315); ctx.fillText("IV", 300, 315);
+        }
+
+        ctx.strokeStyle = "#000"; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(origin,0); ctx.lineTo(origin,400); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,origin); ctx.lineTo(400,origin); ctx.stroke();
+
+        ctx.fillStyle = "#000"; ctx.font = "900 11px Arial";
+        for(let n=-10; n<=10; n++) {
+            if(n===0) continue;
+            ctx.fillText(n, origin + (n*step), origin + 16);
+            ctx.fillText(n, origin - 14, origin - (n*step) + 4);
+        }
+
+        // Hint (HIDDEN IN QUIZ MODE)
+        if (!isQuizMode && attempts >= 2 && mode === "point") {
+            ctx.fillStyle = "rgba(255, 214, 10, 0.7)";
+            ctx.beginPath(); ctx.arc(origin + (targetX * step), origin - (targetY * step), 14, 0, Math.PI * 2); ctx.fill();
+        }
+    }
+
+    function speakTask() {
+        window.speechSynthesis.cancel();
+        let msgStr = (mode === "point") 
+            ? `${phrases[language].point} ${targetX} ${targetY}` 
+            : `${phrases[language].quad} ${targetQuad === 1 ? 'one' : targetQuad === 2 ? 'two' : targetQuad === 3 ? 'three' : 'four'}`;
+        
+        const msg = new SpeechSynthesisUtterance(msgStr.replace('.5', language==='en'?' point five':' punto cinco'));
+        const voices = window.speechSynthesis.getVoices();
+        const bestVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Samantha'));
+        
+        msg.voice = bestVoice || voices[0];
+        msg.lang = language === 'en' ? 'en-US' : 'es-MX';
+        msg.pitch = 1.3; msg.rate = 0.9;
+        window.speechSynthesis.speak(msg);
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = Math.round(((e.clientX - rect.left) - origin) / step * 2) / 2;
+        const y = Math.round((origin - (e.clientY - rect.top)) / step * 2) / 2;
+        
+        let correct = false;
+        if(mode === "point") { if(x === targetX && y === targetY) correct = true; }
+        else {
+            if(targetQuad===1 && x>0 && y>0) correct = true;
+            if(targetQuad===2 && x<0 && y>0) correct = true;
+            if(targetQuad===3 && x<0 && y<0) correct = true;
+            if(targetQuad===4 && x>0 && y<0) correct = true;
+        }
+
+        if(correct) {
+            score += 10;
+            initRound();
+        } else {
+            attempts++;
+            document.getElementById('game-card').classList.add('shake');
+            setTimeout(() => document.getElementById('game-card').classList.remove('shake'), 300);
+            if (!isQuizMode && attempts === 2) {
+                drawGrid();
+            }
+        }
+    });
+
+    function toggleQuiz() { isQuizMode = !isQuizMode; updateUI(); }
+    function setLanguage(lang) { language = lang; updateUI(); speakTask(); }
+    window.speechSynthesis.onvoiceschanged = () => { if(score === 0) initRound(); };
+    initRound();
+</script>
+</body>
+</html>
